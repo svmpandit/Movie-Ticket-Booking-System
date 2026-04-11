@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel - CinemaHub</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-content">
+      <h1>🎬 DSP Cinema Admin</h1>
+      <p>Manage movies and showtimes</p>
+    </div>
+  </header>
+
+  <main class="container admin-container">
+    <section class="booking-panel">
+      <h2>Add New Movie with Show/Screening</h2>
+      <form id="movieForm">
+        <h3 style="margin-top: 1.5rem; margin-bottom: 1rem; color: #666;">Movie Details</h3>
+        <label>
+          Movie Title
+          <input type="text" id="adminTitle" placeholder="Enter movie title" required />
+        </label>
+        <label>
+          Description
+          <textarea id="adminDescription" placeholder="Movie description" rows="3" required></textarea>
+        </label>
+        <label>
+          Genre
+          <input type="text" id="adminGenre" placeholder="e.g., Action, Drama, Sci-Fi" required />
+        </label>
+        <label>
+          Duration
+          <input type="text" id="adminDuration" placeholder="e.g., 2h 30m" required />
+        </label>
+        <label>
+          Poster URL
+          <input type="url" id="adminPoster" placeholder="https://example.com/poster.jpg" required />
+        </label>
+        <label>
+          Initial Rating (0-5)
+          <input type="number" min="0" max="5" step="0.1" id="adminRating" value="4.0" />
+        </label>
+
+        <h3 style="margin-top: 1.5rem; margin-bottom: 1rem; color: #666;">Show/Screening Details</h3>
+        <label>
+          Show Date
+          <input type="date" id="adminDate" required />
+        </label>
+        <label>
+          Show Time
+          <input type="time" id="adminTime" required />
+        </label>
+        <label>
+          Screen/Hall
+          <input type="text" id="adminScreen" placeholder="e.g., Screen 1, Hall A" required />
+        </label>
+        <label>
+          Ticket Price (₹)
+          <input type="number" min="50" step="10" id="adminPrice" required />
+        </label>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">➕ Add Movie with Show</button>
+      </form>
+    </section>
+
+    <a class="back-link" href="/">← Back to Booking Site</a>
+  </main>
+
+  <!-- MANAGE MOVIES SECTION -->
+  <section class="container" id="manageMoviesSection" style="margin-top: 2rem;">
+    <div class="section-header">
+      <div>
+        <h2>Manage Movies</h2>
+        <p>View and delete existing movies</p>
+      </div>
+    </div>
+    <div id="manageMoviesGrid" class="movies-grid"></div>
+  </section>
+
+  <!-- CONFIRM MODAL -->
+  <div id="confirmModal" class="modal-overlay hidden" style="z-index: 1050;">
+    <div class="modal-content" style="max-width: 400px; padding: 2rem; text-align: center;">
+      <h3 style="margin-bottom: 1rem;">Confirm Action</h3>
+      <p id="confirmMessage" style="margin-bottom: 2rem; color: var(--text-secondary);">Are you sure?</p>
+      <div style="display: flex; gap: 1rem; justify-content: center;">
+        <button id="cancelConfirmBtn" class="btn btn-secondary" style="flex:1;">Cancel</button>
+        <button id="confirmActionBtn" class="btn btn-primary" style="flex:1; background: var(--danger); border-color: var(--danger);">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Notification System
+    function showNotification(message, type = 'info') {
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        background: ${type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 2000;
+        animation: slideIn 0.3s ease;
+        font-weight: 500;
+      `;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(400px); opacity: 0; } }
+    `;
+    document.head.appendChild(style);
+
+    // Confirm Modal Logic
+    let confirmActionCallback = null;
+    function showConfirmDialog(message, callback) {
+      document.getElementById('confirmMessage').textContent = message;
+      confirmActionCallback = callback;
+      document.getElementById('confirmModal').classList.remove('hidden');
+    }
+
+    document.getElementById('cancelConfirmBtn').addEventListener('click', () => {
+      document.getElementById('confirmModal').classList.add('hidden');
+      confirmActionCallback = null;
+    });
+
+    document.getElementById('confirmActionBtn').addEventListener('click', () => {
+      document.getElementById('confirmModal').classList.add('hidden');
+      if (confirmActionCallback) {
+        confirmActionCallback();
+        confirmActionCallback = null;
+      }
+    });
+
+    // Load and display movies for management
+    async function loadMoviesForManagement() {
+      try {
+        const response = await fetch('/api/movies');
+        const movies = await response.json();
+        const manageMoviesGrid = document.getElementById('manageMoviesGrid');
+
+        if (movies.length === 0) {
+          manageMoviesGrid.innerHTML = '<div class="booking-panel" style="text-align: center; grid-column: 1 / -1;"><p>No movies found.</p></div>';
+          return;
+        }
+
+        manageMoviesGrid.innerHTML = movies.map(movie => `
+          <article class="movie-card" data-id="${movie.id}">
+            <img src="${movie.poster}" alt="${movie.title}" />
+            <div class="movie-body">
+              <h3>${movie.title}</h3>
+              <p>${movie.description}</p>
+              <div class="meta-row">
+                <span>${movie.genre}</span>
+                <span>${movie.duration}</span>
+              </div>
+              <div class="meta-row">
+                <span class="rating-badge">⭐ ${movie.average_rating?.toFixed(1) || movie.rating?.toFixed(1) || '4.0'}</span>
+                <button class="btn btn-danger btn-small deleteBtn" data-id="${movie.id}" style="background: #dc3545; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">🗑️ Delete</button>
+              </div>
+            </div>
+          </article>
+        `).join('');
+
+        // Add event listeners for delete buttons
+        document.querySelectorAll('.deleteBtn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const movieId = Number(btn.dataset.id);
+            const movieTitle = btn.closest('.movie-card').querySelector('h3').textContent;
+
+            showConfirmDialog(`Are you sure you want to delete "${movieTitle}"? This will also delete all associated shows and bookings.`, async () => {
+              try {
+                const response = await fetch(`/api/admin/movies/${movieId}`, {
+                  method: 'DELETE'
+                });
+
+                if (response.ok) {
+                  showNotification('Movie deleted successfully!', 'success');
+                  loadMoviesForManagement(); // Refresh the list
+                } else {
+                  const result = await response.json();
+                  showNotification(result.error || 'Failed to delete movie', 'error');
+                }
+              } catch (error) {
+                showNotification('Error: ' + error.message, 'error');
+              }
+            });
+          });
+        });
+      } catch (error) {
+        console.error('Error loading movies:', error);
+        document.getElementById('manageMoviesGrid').innerHTML = '<div class="booking-panel" style="text-align: center; grid-column: 1 / -1;"><p>Error loading movies.</p></div>';
+      }
+    }
+
+    document.getElementById('movieForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      console.log('Form submitted');
+      
+      const payload = {
+        title: document.getElementById('adminTitle').value,
+        description: document.getElementById('adminDescription').value,
+        genre: document.getElementById('adminGenre').value,
+        duration: document.getElementById('adminDuration').value,
+        poster: document.getElementById('adminPoster').value,
+        rating: parseFloat(document.getElementById('adminRating').value) || 0,
+        date: document.getElementById('adminDate').value,
+        time: document.getElementById('adminTime').value,
+        screen: document.getElementById('adminScreen').value,
+        price: parseFloat(document.getElementById('adminPrice').value)
+      };
+      
+      console.log('Payload:', payload);
+      
+      try {
+        const res = await fetch('/api/admin/movie-with-show', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        console.log('Response status:', res.status);
+        
+        const result = await res.json();
+        console.log('Response body:', result);
+        
+        if (res.ok) {
+          showNotification('✓ Movie and show added successfully!', 'success');
+          document.getElementById('movieForm').reset();
+          loadMoviesForManagement(); // Refresh the management list
+        } else {
+          showNotification(result.error || 'Failed to add movie and show', 'error');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error: ' + error.message, 'error');
+      }
+    });
+
+    // Load movies when page loads
+    loadMoviesForManagement();
+  </script>
+</body>
+</html>

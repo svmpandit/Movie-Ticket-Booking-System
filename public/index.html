@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DSP Cinema - Book Movie Tickets Online</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header-nav">
+    <div class="header-container">
+      <div class="logo">🎬 DSP Cinema</div>
+      <nav class="nav-links">
+        <button id="homeBtn" class="nav-link active">Home</button>
+        <button id="browseBtn" class="nav-link">Browse Movies</button>
+        <button id="bookingsBtn" class="nav-link">My Bookings</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- HOME PAGE -->
+  <section id="homePage" class="home-page">
+    <div class="hero-compact">
+      <div class="hero-content-compact">
+        <h1>Welcome to DSP Cinema</h1>
+        <p>Book your favorite movies instantly</p>
+        <button id="startBrowsingBtn" class="btn btn-primary">Browse Showing Today</button>
+      </div>
+    </div>
+
+    <!-- HOME CONTENT -->
+    <div class="container">
+      <!-- CTA SECTION -->
+      <section class="cta-section">
+        <div class="cta-card">
+          <h3>🎟️ Easy Booking</h3>
+          <p>Select seats, enter details, and book in seconds</p>
+        </div>
+        <div class="cta-card">
+          <h3>💳 Multiple Tickets</h3>
+          <p>Book multiple tickets for your family and friends</p>
+        </div>
+        <div class="cta-card">
+          <h3>⭐ Instant Reviews</h3>
+          <p>Share your movie experience with fellow cinema lovers</p>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- MOVIES BROWSE PAGE -->
+  <main class="container hidden" id="moviesPage">
+    <section class="section" id="moviesSection">
+      <div class="section-header">
+        <div>
+          <h2>All Movies</h2>
+          <p>Select a movie to book tickets</p>
+        </div>
+      </div>
+      <div id="moviesGrid" class="movies-grid"></div>
+    </section>
+  </main>
+
+  <!-- SHOW SELECTION SECTION -->
+  <div id="showSection" class="modal-overlay hidden">
+    <div class="modal-content">
+      <button id="closeModalBtn" class="modal-close-btn">&times;</button>
+      <div class="section-header" style="margin-top: 0.5rem;">
+        <div>
+          <h2 id="selectedMovieTitle">Movie Title</h2>
+          <p id="selectedMovieDescription">Movie description</p>
+        </div>
+      </div>
+    
+    <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Select a Show</h3>
+    <div id="showTimes" class="show-times-grid"></div>
+
+    <!-- SEAT SELECTION -->
+    <div id="seatMapSection" class="hidden">
+      <h3>Select Your Seats (Click to select/deselect)</h3>
+      <div class="legend">
+        <span><span class="seat available"></span>Available</span>
+        <span><span class="seat selected"></span>Selected</span>
+        <span><span class="seat booked"></span>Booked</span>
+      </div>
+      <div id="seatMap" class="seat-map"></div>
+      <div id="seatCounter" style="text-align: center; margin-top: 1.5rem; font-size: 1.1rem; font-weight: 600;">
+        <p>Selected: <span id="selectedCount">0</span> seats | Total: <span id="totalPrice">₹0</span></p>
+      </div>
+    </div>
+
+    <!-- BOOKING FORM -->
+    <div id="bookingFormSection" class="hidden booking-panel">
+      <h3>Complete Your Booking</h3>
+      <form id="bookingForm">
+        <label>
+          Your Name
+          <input type="text" id="customerName" placeholder="Enter your full name" required />
+        </label>
+        <label>
+          Email Address
+          <input type="email" id="customerEmail" placeholder="your@email.com" required />
+        </label>
+        <label>
+          Selected Seats
+          <input readonly id="selectedSeatsList" placeholder="No seats selected" />
+        </label>
+        <label>
+          Number of Tickets
+          <input readonly id="ticketCount" value="0" />
+        </label>
+        <label>
+          Total Amount
+          <input readonly id="totalAmount" value="₹0" style="color: var(--accent); font-weight: 600;" />
+        </label>
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Book Tickets</button>
+      </form>
+    </div>
+
+    <!-- REVIEWS SECTION -->
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2>Movie Reviews</h2>
+          <p>Share your movie experience</p>
+        </div>
+      </div>
+
+      <div id="reviewFormSection" class="hidden booking-panel">
+        <h3>Share Your Review</h3>
+        <form id="reviewForm">
+          <input type="hidden" id="reviewMovieId" />
+          <label>
+            Your Name
+            <input type="text" id="reviewName" placeholder="Your name" required />
+          </label>
+          <label>
+            Rating
+            <select id="reviewRating" required>
+              <option value="">Select a rating</option>
+              <option value="5">⭐⭐⭐⭐⭐ Excellent</option>
+              <option value="4">⭐⭐⭐⭐ Very Good</option>
+              <option value="3">⭐⭐⭐ Good</option>
+              <option value="2">⭐⭐ Fair</option>
+              <option value="1">⭐ Poor</option>
+            </select>
+          </label>
+          <label>
+            Your Review
+            <textarea id="reviewComment" placeholder="Share your thoughts about the movie..." required></textarea>
+          </label>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">Submit Review</button>
+        </form>
+      </div>
+
+      <div id="reviewList" class="review-list"></div>
+    </section>
+    </div>
+  </div>
+
+  <!-- MY BOOKINGS PAGE -->
+  <section class="container hidden" id="bookingPage">
+    <div class="section-header">
+      <div>
+        <h2>My Bookings</h2>
+        <p>View and manage your tickets</p>
+      </div>
+    </div>
+    
+    <div class="booking-panel">
+      <h3>Load Your Bookings</h3>
+      <div class="booking-actions">
+        <input type="email" id="bookingEmail" placeholder="Enter your email address" />
+        <button id="loadBookingsBtn" class="btn btn-primary btn-small">Load Bookings</button>
+      </div>
+    </div>
+
+    <div id="bookingList"></div>
+  </section>
+
+  <footer>
+    <h3>🎬 DSP Cinema</h3>
+    <p>Your favorite movie booking platform in India</p>
+    <p style="margin-top: 1.5rem; font-size: 1rem; color: var(--accent); font-weight: 600;">
+      ✨ Made with 💜 by <strong>Shivam</strong> ✨
+    </p>
+    <p style="margin-top: 1rem; font-size: 0.85rem;">
+      <a href="/admin">⚙️ Admin Panel</a> • © 2026 DSP Cinema. All rights reserved.
+    </p>
+  </footer>
+
+  <!-- CONFIRM MODAL -->
+  <div id="confirmModal" class="modal-overlay hidden" style="z-index: 1050;">
+    <div class="modal-content" style="max-width: 400px; padding: 2rem; text-align: center;">
+      <h3 style="margin-bottom: 1rem;">Cancel Booking</h3>
+      <p style="margin-bottom: 2rem; color: var(--text-secondary);">Are you sure you want to cancel this booking? This action cannot be undone.</p>
+      <div style="display: flex; gap: 1rem; justify-content: center;">
+        <button id="cancelConfirmBtn" class="btn btn-secondary">No, Keep it</button>
+        <button id="confirmActionBtn" class="btn btn-primary" style="background: var(--danger); border-color: var(--danger);">Yes, Cancel it</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
