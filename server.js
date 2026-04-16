@@ -61,6 +61,29 @@ function initDatabase() {
       FOREIGN KEY(movie_id) REFERENCES movies(id)
     )`);
 
+    db.run(`CREATE TABLE IF NOT EXISTS cinemas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      location TEXT NOT NULL
+    )`);
+
+    // Ensure cinema_id exists on shows for legacy databases
+    db.all("PRAGMA table_info(shows)", (err, rows) => {
+      if (!err && rows && !rows.some(r => r.name === 'cinema_id')) {
+        db.run("ALTER TABLE shows ADD COLUMN cinema_id INTEGER REFERENCES cinemas(id)", () => {
+          db.run("UPDATE shows SET cinema_id = 1 WHERE cinema_id IS NULL");
+        });
+      } else if (!err) {
+        // Ensure any newly inserted shows without cinema_id get assigned to 1
+        db.run("UPDATE shows SET cinema_id = 1 WHERE cinema_id IS NULL");
+      }
+    });
+
+    db.get('SELECT COUNT(*) AS count FROM cinemas', (err, row) => {
+      if (err || row.count > 0) return;
+      db.run('INSERT INTO cinemas (id, name, location) VALUES (1, ?, ?)', ['Main Cinema', 'Mumbai']);
+    });
+
     db.get('SELECT COUNT(*) AS count FROM movies', (err, row) => {
       if (err || row.count > 0) return;
 
@@ -194,10 +217,53 @@ app.get('/api/movies', (req, res) => {
   });
 });
 
+app.get('/api/cinemas', (req, res) => {
+  db.all('SELECT * FROM cinemas ORDER BY name', (err, cinemas) => {
+    if (err) return res.status(500).json({ error: 'Failed to load cinemas' });
+    res.json(cinemas);
+  });
+});
+
+app.post('/api/admin/cinemas', (req, res) => {
+  const { name, location } = req.body;
+  if (!name || !location) return res.status(400).json({ error: 'Name and location are required.' });
+  db.run('INSERT INTO cinemas (name, location) VALUES (?, ?)', [name, location], function(err) {
+    if (err) return res.status(500).json({ error: 'Failed to create cinema' });
+    res.json({ id: this.lastID, name, location });
+  });
+});
+
+app.delete('/api/admin/cinemas/:id', (req, res) => {
+  const cinemaId = req.params.id;
+  db.run('DELETE FROM cinemas WHERE id = ?', [cinemaId], function(err) {
+    if (err) return res.status(500).json({ error: 'Failed to delete cinema' });
+    res.json({ deleted: true });
+  });
+});
+
 app.get('/api/movies/:movieId/shows', (req, res) => {
-  db.all('SELECT * FROM shows WHERE movie_id = ? ORDER BY date, time', [req.params.movieId], (err, shows) => {
+  db.all(`SELECT shows.*, cinemas.name AS cinema_name, cinemas.location AS cinema_location
+          FROM shows 
+          LEFT JOIN cinemas ON shows.cinema_id = cinemas.id
+          WHERE movie_id = ? ORDER BY shows.date, shows.time`, [req.params.movieId], (err, shows) => {
     if (err) return res.status(500).json({ error: 'Failed to load shows' });
-    res.json(shows);
+    
+    // Filter out past shows
+    const now = new Date();
+    const futureShows = shows.filter(show => {
+      const timeParts = show.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!timeParts) return true;
+      let hours = parseInt(timeParts[1], 10);
+      const minutes = parseInt(timeParts[2], 10);
+      const ampm = timeParts[3].toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      
+      const showDate = new Date(`${show.date}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`);
+      return showDate >= now;
+    });
+
+    res.json(futureShows);
   });
 });
 
@@ -242,9 +308,11 @@ app.get('/api/bookings', (req, res) => {
   db.all(`SELECT bookings.id, bookings.show_id, bookings.seat_row AS row, bookings.seat_col AS col,
           bookings.customer_name, bookings.customer_email, bookings.created_at,
           shows.date, shows.time, shows.screen, shows.price,
+          cinemas.name AS cinema_name,
           movies.title AS movie_title
           FROM bookings
           JOIN shows ON shows.id = bookings.show_id
+          LEFT JOIN cinemas ON shows.cinema_id = cinemas.id
           JOIN movies ON movies.id = shows.movie_id
           WHERE bookings.customer_email = ?
           ORDER BY bookings.created_at DESC`, [email], (err, rows) => {
@@ -301,7 +369,7 @@ app.post('/api/admin/movies', (req, res) => {
 });
 
 app.post('/api/admin/movie-with-show', (req, res) => {
-  const { title, description, genre, duration, poster, rating, date, time, screen, price } = req.body;
+  const { title, description, genre, duration, poster, rating, cinemaId, cinemaIds, date, time, screen, price } = req.body;
   
   // Validate movie fields
   if (!title || !description || !genre || !duration || !poster) {
@@ -320,26 +388,45 @@ app.post('/api/admin/movie-with-show', (req, res) => {
       
       const movieId = this.lastID;
       
-      // Now insert the show for this movie
-      db.run('INSERT INTO shows (movie_id, date, time, screen, price) VALUES (?, ?, ?, ?, ?)',
-        [movieId, date, time, screen, price], function (showErr) {
-          if (showErr) return res.status(500).json({ error: 'Failed to add show.' });
-          res.json({ movieId: movieId, showId: this.lastID });
-        });
+      // Now insert the shows for this movie
+      const idsToInsert = (cinemaIds && cinemaIds.length) ? cinemaIds : [cinemaId || 1];
+      let insertedCount = 0;
+      let hasError = false;
+      idsToInsert.forEach(cId => {
+        db.run('INSERT INTO shows (movie_id, cinema_id, date, time, screen, price) VALUES (?, ?, ?, ?, ?, ?)',
+          [movieId, cId, date, time, screen, price], function (showErr) {
+            if (showErr) hasError = true;
+            insertedCount++;
+            if (insertedCount === idsToInsert.length) {
+              if (hasError) return res.status(500).json({ error: 'Failed to add some shows.' });
+              res.json({ movieId: movieId, addedShows: insertedCount });
+            }
+          });
+      });
     });
 });
 
 app.post('/api/admin/shows', (req, res) => {
-  const { movieId, date, time, screen, price } = req.body;
+  const { movieId, cinemaId, cinemaIds, date, time, screen, price } = req.body;
   if (!movieId || !date || !time || !screen || !price) {
     return res.status(400).json({ error: 'All show fields are required.' });
   }
 
-  db.run('INSERT INTO shows (movie_id, date, time, screen, price) VALUES (?, ?, ?, ?, ?)',
-    [movieId, date, time, screen, price], function (err) {
-      if (err) return res.status(500).json({ error: 'Failed to add show.' });
-      res.json({ id: this.lastID });
-    });
+  const idsToInsert = (cinemaIds && cinemaIds.length) ? cinemaIds : [cinemaId || 1];
+  let insertedCount = 0;
+  let hasError = false;
+
+  idsToInsert.forEach(cId => {
+    db.run('INSERT INTO shows (movie_id, cinema_id, date, time, screen, price) VALUES (?, ?, ?, ?, ?, ?)',
+      [movieId, cId, date, time, screen, price], function (err) {
+        if (err) hasError = true;
+        insertedCount++;
+        if (insertedCount === idsToInsert.length) {
+          if (hasError) return res.status(500).json({ error: 'Failed to add some shows.' });
+          res.json({ addedShows: insertedCount });
+        }
+      });
+  });
 });
 
 app.delete('/api/admin/movies/:movieId', (req, res) => {

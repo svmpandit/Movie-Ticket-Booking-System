@@ -45,6 +45,12 @@
         </label>
 
         <h3 style="margin-top: 1.5rem; margin-bottom: 1rem; color: #666;">Show/Screening Details</h3>
+        <div style="margin-bottom: 1rem;">
+          <label style="margin-bottom: 0.5rem; display: block;">Select Cinema(s)</label>
+          <div id="adminCinemaCheckboxes" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 4px; max-height: 150px; overflow-y: auto; background: var(--card);">
+            <span style="font-size: 0.9em; color: var(--text-secondary);">Loading...</span>
+          </div>
+        </div>
         <label>
           Show Date
           <input type="date" id="adminDate" required />
@@ -65,8 +71,67 @@
       </form>
     </section>
 
+    <section class="booking-panel" style="margin-top: 2rem;">
+      <h2>Add Show to Existing Movie</h2>
+      <form id="existingShowForm">
+        <label>
+          Select Movie
+          <select id="adminExistingMovie" required>
+            <option value="">Loading...</option>
+          </select>
+        </label>
+        <div style="margin-bottom: 1rem;">
+          <label style="margin-bottom: 0.5rem; display: block;">Select Cinema(s)</label>
+          <div id="adminExistingCinemaCheckboxes" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 4px; max-height: 150px; overflow-y: auto; background: var(--card);">
+            <span style="font-size: 0.9em; color: var(--text-secondary);">Loading...</span>
+          </div>
+        </div>
+        <label>
+          Show Date
+          <input type="date" id="adminExistingDate" required />
+        </label>
+        <label>
+          Show Time
+          <input type="time" id="adminExistingTime" required />
+        </label>
+        <label>
+          Screen/Hall
+          <input type="text" id="adminExistingScreen" placeholder="e.g., Screen 1, Hall A" required />
+        </label>
+        <label>
+          Ticket Price (₹)
+          <input type="number" min="50" step="10" id="adminExistingPrice" required />
+        </label>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">➕ Add Show</button>
+      </form>
+    </section>
+
     <a class="back-link" href="/">← Back to Booking Site</a>
   </main>
+
+  <!-- MANAGE CINEMAS SECTION -->
+  <section class="container" id="manageCinemasSection" style="margin-top: 2rem;">
+    <div class="section-header">
+      <div>
+        <h2>Manage Cinemas</h2>
+        <p>Add and remove cinemas</p>
+      </div>
+    </div>
+    <div class="booking-panel" style="margin-bottom: 1.5rem;">
+      <form id="cinemaForm" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+        <label style="flex: 1; margin: 0; min-width: 200px;">
+          Cinema Name
+          <input type="text" id="adminCinemaName" placeholder="e.g., DSP Main Cinema" required />
+        </label>
+        <label style="flex: 1; margin: 0; min-width: 200px;">
+          Location
+          <input type="text" id="adminCinemaLocation" placeholder="e.g., Mumbai" required />
+        </label>
+        <button type="submit" class="btn btn-primary" style="margin: 0; padding: 0.75rem 1.5rem;">➕ Add Cinema</button>
+      </form>
+    </div>
+    <div id="manageCinemasGrid" class="movies-grid" style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));"></div>
+  </section>
 
   <!-- MANAGE MOVIES SECTION -->
   <section class="container" id="manageMoviesSection" style="margin-top: 2rem;">
@@ -145,11 +210,108 @@
       }
     });
 
+    // Load and display cinemas
+    async function loadCinemasForManagement() {
+      try {
+        const response = await fetch('/api/cinemas');
+        const cinemas = await response.json();
+        
+        const adminCinemaContainer = document.getElementById('adminCinemaCheckboxes');
+        const adminExistingCinemaContainer = document.getElementById('adminExistingCinemaCheckboxes');
+        
+        [adminCinemaContainer, adminExistingCinemaContainer].forEach(container => {
+          if (container) {
+            container.innerHTML = cinemas.length ? 
+              cinemas.map(c => `
+                <label style="display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 0.75rem; font-weight: normal; margin-bottom: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" name="cinema" value="${c.id}" style="width: 18px; height: 18px; margin: 0; padding: 0;" /> 
+                  <span style="color: var(--text); font-size: 1rem;">${c.name}</span>
+                </label>
+              `).join('') :
+              '<span style="font-size: 0.9em;">No cinemas available</span>';
+          }
+        });
+
+        const manageCinemasGrid = document.getElementById('manageCinemasGrid');
+        if (!manageCinemasGrid) return;
+        
+        if (cinemas.length === 0) {
+          manageCinemasGrid.innerHTML = '<div class="booking-panel" style="text-align: center; grid-column: 1 / -1;"><p>No cinemas found.</p></div>';
+          return;
+        }
+
+        manageCinemasGrid.innerHTML = cinemas.map(cinema => `
+          <article class="movie-card" data-id="${cinema.id}" style="padding: 1.5rem;">
+            <h3>${cinema.name}</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 1rem;">📍 ${cinema.location}</p>
+            <button class="btn btn-danger btn-small deleteCinemaBtn" data-id="${cinema.id}" style="background: #dc3545; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; width: 100%;">🗑️ Delete</button>
+          </article>
+        `).join('');
+
+        document.querySelectorAll('.deleteCinemaBtn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const cinemaId = Number(btn.dataset.id);
+            const cinemaName = btn.closest('.movie-card').querySelector('h3').textContent;
+            showConfirmDialog(`Are you sure you want to delete "${cinemaName}"?`, async () => {
+              try {
+                const response = await fetch(`/api/admin/cinemas/${cinemaId}`, { method: 'DELETE' });
+                if (response.ok) {
+                  showNotification('Cinema deleted successfully!', 'success');
+                  loadCinemasForManagement();
+                } else {
+                  const result = await response.json();
+                  showNotification(result.error || 'Failed to delete cinema', 'error');
+                }
+              } catch (error) {
+                showNotification('Error: ' + error.message, 'error');
+              }
+            });
+          });
+        });
+      } catch (error) {
+        console.error('Error loading cinemas:', error);
+      }
+    }
+
+    document.getElementById('cinemaForm')?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const payload = {
+        name: document.getElementById('adminCinemaName').value,
+        location: document.getElementById('adminCinemaLocation').value
+      };
+      
+      try {
+        const res = await fetch('/api/admin/cinemas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          showNotification('Cinema added successfully!', 'success');
+          document.getElementById('cinemaForm').reset();
+          loadCinemasForManagement();
+        } else {
+          const result = await res.json();
+          showNotification(result.error || 'Failed to add cinema', 'error');
+        }
+      } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+      }
+    });
+
     // Load and display movies for management
     async function loadMoviesForManagement() {
       try {
         const response = await fetch('/api/movies');
         const movies = await response.json();
+        
+        const adminExistingMovie = document.getElementById('adminExistingMovie');
+        if (adminExistingMovie) {
+          adminExistingMovie.innerHTML = movies.length ?
+            movies.map(m => `<option value="${m.id}">${m.title}</option>`).join('') :
+            '<option value="">No movies available</option>';
+        }
+
         const manageMoviesGrid = document.getElementById('manageMoviesGrid');
 
         if (movies.length === 0) {
@@ -210,6 +372,13 @@
       event.preventDefault();
       console.log('Form submitted');
       
+      const selectedCinemas = Array.from(document.querySelectorAll('#adminCinemaCheckboxes input:checked')).map(cb => parseInt(cb.value, 10));
+
+      if (selectedCinemas.length === 0) {
+        showNotification('Please select at least one cinema.', 'error');
+        return;
+      }
+
       const payload = {
         title: document.getElementById('adminTitle').value,
         description: document.getElementById('adminDescription').value,
@@ -217,6 +386,7 @@
         duration: document.getElementById('adminDuration').value,
         poster: document.getElementById('adminPoster').value,
         rating: parseFloat(document.getElementById('adminRating').value) || 0,
+        cinemaIds: selectedCinemas.length ? selectedCinemas : null,
         date: document.getElementById('adminDate').value,
         time: document.getElementById('adminTime').value,
         screen: document.getElementById('adminScreen').value,
@@ -250,7 +420,45 @@
       }
     });
 
-    // Load movies when page loads
+    document.getElementById('existingShowForm')?.addEventListener('submit', async event => {
+      event.preventDefault();
+
+      const selectedExistingCinemas = Array.from(document.querySelectorAll('#adminExistingCinemaCheckboxes input:checked')).map(cb => parseInt(cb.value, 10));
+
+      if (selectedExistingCinemas.length === 0) {
+        showNotification('Please select at least one cinema.', 'error');
+        return;
+      }
+
+      const payload = {
+        movieId: parseInt(document.getElementById('adminExistingMovie').value, 10),
+        cinemaIds: selectedExistingCinemas.length ? selectedExistingCinemas : null,
+        date: document.getElementById('adminExistingDate').value,
+        time: document.getElementById('adminExistingTime').value,
+        screen: document.getElementById('adminExistingScreen').value,
+        price: parseFloat(document.getElementById('adminExistingPrice').value)
+      };
+      
+      try {
+        const res = await fetch('/api/admin/shows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          showNotification('Show added to existing movie successfully!', 'success');
+          document.getElementById('existingShowForm').reset();
+        } else {
+          const result = await res.json();
+          showNotification(result.error || 'Failed to add show', 'error');
+        }
+      } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+      }
+    });
+
+    // Load movies and cinemas when page loads
+    loadCinemasForManagement();
     loadMoviesForManagement();
   </script>
 </body>

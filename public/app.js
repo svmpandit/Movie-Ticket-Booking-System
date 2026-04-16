@@ -249,6 +249,7 @@ async function loadShows(movieId) {
       <div class="show-card" data-show-id="${show.id}">
         <h3>${show.time}</h3>
         <small>${show.date}</small>
+        <p style="margin: 0.5rem 0; font-weight: 500; font-size: 0.9rem; color: var(--accent);">${show.cinema_name || 'Main Cinema'}</p>
         <small>${show.screen}</small>
         <div class="price">₹${show.price}</div>
         <button class="btn btn-primary btn-small selectShowBtn" data-show-id="${show.id}">Select</button>
@@ -429,6 +430,10 @@ async function loadBookings(email) {
           <h3>${booking.movie_title}</h3>
           <small>${booking.date} • ${booking.time}</small>
           <div class="booking-details">
+            <div class="detail" style="flex: 1.5;">
+              <div class="detail-label">Cinema</div>
+              <div class="detail-value" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${booking.cinema_name || 'Main Cinema'}">${booking.cinema_name || 'Main Cinema'}</div>
+            </div>
             <div class="detail">
               <div class="detail-label">Screen</div>
               <div class="detail-value">${booking.screen}</div>
