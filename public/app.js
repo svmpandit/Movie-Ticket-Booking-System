@@ -4,7 +4,8 @@ const state = {
   selectedShow: null,
   selectedSeats: [],
   seats: [],
-  showPrice: 0
+  showPrice: 0,
+  user: null
 };
 
 // DOM Elements
@@ -21,9 +22,6 @@ const totalAmount = document.getElementById('totalAmount');
 const selectedCount = document.getElementById('selectedCount');
 const totalPrice = document.getElementById('totalPrice');
 const bookingForm = document.getElementById('bookingForm');
-const customerNameInput = document.getElementById('customerName');
-const customerEmailInput = document.getElementById('customerEmail');
-const bookingEmailInput = document.getElementById('bookingEmail');
 const loadBookingsBtn = document.getElementById('loadBookingsBtn');
 const bookingList = document.getElementById('bookingList');
 const reviewList = document.getElementById('reviewList');
@@ -34,6 +32,27 @@ const reviewName = document.getElementById('reviewName');
 const reviewRating = document.getElementById('reviewRating');
 const reviewComment = document.getElementById('reviewComment');
 const closeModalBtn = document.getElementById('closeModalBtn');
+
+// Auth DOM Elements
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const userInfo = document.getElementById('userInfo');
+const loginModal = document.getElementById('loginModal');
+const closeLoginModalBtn = document.getElementById('closeLoginModalBtn');
+const loginForm = document.getElementById('loginForm');
+const loginUsername = document.getElementById('loginUsername');
+const loginPassword = document.getElementById('loginPassword');
+
+// Registration DOM Elements
+const loginModalTitle = document.getElementById('loginModalTitle');
+const loginFormContainer = document.getElementById('loginFormContainer');
+const registerFormContainer = document.getElementById('registerFormContainer');
+const showRegisterLink = document.getElementById('showRegisterLink');
+const showLoginLink = document.getElementById('showLoginLink');
+const registerForm = document.getElementById('registerForm');
+const registerUsername = document.getElementById('registerUsername');
+const registerPassword = document.getElementById('registerPassword');
+const registerConfirmPassword = document.getElementById('registerConfirmPassword');
 
 // Confirm Modal Logic
 let confirmActionCallback = null;
@@ -116,6 +135,14 @@ function goToMovies() {
 }
 
 function goToShowSelection(movieId) {
+  // Check if user is authenticated
+  if (!state.user) {
+    showNotification('Please login to book tickets', 'error');
+    loginModal.classList.remove('hidden');
+    showLoginForm();
+    return;
+  }
+
   state.selectedMovie = state.movies.find(movie => movie.id === movieId);
   selectedMovieTitle.textContent = state.selectedMovie.title;
   selectedMovieDescription.textContent = state.selectedMovie.description;
@@ -133,8 +160,13 @@ function goToShowSelection(movieId) {
 }
 
 function goToMyBookings() {
+  if (!state.user) {
+    showNotification('Please login to view your bookings', 'error');
+    loginModal.classList.remove('hidden');
+    showLoginForm();
+    return;
+  }
   showPage(bookingPage);
-  document.getElementById('bookingEmail').focus();
 }
 
 // Event listeners for navigation
@@ -152,6 +184,182 @@ if (showSection) {
     }
   });
 }
+
+// Authentication functions
+async function checkAuthStatus() {
+  try {
+    const response = await fetch('/api/user');
+    const data = await response.json();
+    state.user = data.user;
+    updateAuthUI();
+  } catch (error) {
+    console.error('Failed to check auth status:', error);
+  }
+}
+
+function updateAuthUI() {
+  const adminLink = document.getElementById('adminLink');
+  if (state.user) {
+    loginBtn.classList.add('hidden');
+    logoutBtn.classList.remove('hidden');
+    userInfo.classList.remove('hidden');
+    userInfo.textContent = `Welcome, ${state.user.username}${state.user.role === 'admin' ? ' (Admin)' : ''}`;
+    if (state.user.role === 'admin' && adminLink) {
+      adminLink.style.display = 'inline';
+    }
+  } else {
+    loginBtn.classList.remove('hidden');
+    logoutBtn.classList.add('hidden');
+    userInfo.classList.add('hidden');
+    userInfo.textContent = '';
+    if (adminLink) {
+      adminLink.style.display = 'none';
+    }
+  }
+}
+
+async function login(username, password) {
+  try {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      state.user = data.user;
+      updateAuthUI();
+      loginModal.classList.add('hidden');
+      loginForm.reset();
+      showNotification('Login successful!', 'success');
+      
+      // Redirect to admin panel if admin
+      if (data.user.role === 'admin') {
+        window.location.href = '/admin';
+      }
+    } else {
+      showNotification(data.error || 'Login failed', 'error');
+    }
+  } catch (error) {
+    showNotification('Login failed', 'error');
+  }
+}
+
+async function register(username, password, confirmPassword) {
+  if (password !== confirmPassword) {
+    showNotification('Passwords do not match', 'error');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      state.user = data.user;
+      updateAuthUI();
+      loginModal.classList.add('hidden');
+      registerForm.reset();
+      showNotification('Registration successful! Welcome to DSP Cinema!', 'success');
+    } else {
+      showNotification(data.error || 'Registration failed', 'error');
+    }
+  } catch (error) {
+    showNotification('Registration failed', 'error');
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/logout', { method: 'POST' });
+    state.user = null;
+    updateAuthUI();
+    showNotification('Logged out successfully', 'success');
+  } catch (error) {
+    showNotification('Logout failed', 'error');
+  }
+}
+
+// Auth event listeners
+loginBtn.addEventListener('click', () => {
+  showLoginForm();
+  loginModal.classList.remove('hidden');
+});
+
+logoutBtn.addEventListener('click', logout);
+
+closeLoginModalBtn.addEventListener('click', () => {
+  loginModal.classList.add('hidden');
+  loginForm.reset();
+  registerForm.reset();
+});
+
+loginModal.addEventListener('click', (e) => {
+  if (e.target === loginModal) {
+    loginModal.classList.add('hidden');
+    loginForm.reset();
+    registerForm.reset();
+  }
+});
+
+loginForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const username = loginUsername.value.trim();
+  const password = loginPassword.value.trim();
+  if (username && password) {
+    login(username, password);
+  }
+});
+
+// Registration event listeners
+showRegisterLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  showRegisterForm();
+});
+
+showLoginLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  showLoginForm();
+});
+
+registerForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const username = registerUsername.value.trim();
+  const password = registerPassword.value;
+  const confirmPassword = registerConfirmPassword.value;
+  if (username && password && confirmPassword) {
+    register(username, password, confirmPassword);
+  }
+});
+
+// Form switching functions
+function showLoginForm() {
+  loginModalTitle.textContent = 'Login to DSP Cinema';
+  loginFormContainer.classList.remove('hidden');
+  registerFormContainer.classList.add('hidden');
+  loginUsername.focus();
+}
+
+function showRegisterForm() {
+  loginModalTitle.textContent = 'Register for DSP Cinema';
+  loginFormContainer.classList.add('hidden');
+  registerFormContainer.classList.remove('hidden');
+  registerUsername.focus();
+}
+
+// Initialize auth status on page load
+document.addEventListener('DOMContentLoaded', checkAuthStatus);
 
 // Fetch and Render Movies
 async function fetchMovies() {
@@ -368,9 +576,7 @@ bookingForm.addEventListener('submit', async event => {
   const bookings = state.selectedSeats.map(seat => ({
     showId: state.selectedShow,
     row: seat.row,
-    col: seat.col,
-    customerName: customerNameInput.value.trim(),
-    customerEmail: customerEmailInput.value.trim()
+    col: seat.col
   }));
 
   try {
@@ -407,17 +613,18 @@ bookingForm.addEventListener('submit', async event => {
 
 // Load Bookings
 loadBookingsBtn.addEventListener('click', () => {
-  loadBookings(bookingEmailInput.value.trim());
-});
-
-async function loadBookings(email) {
-  if (!email) {
-    showNotification('Please enter your email address', 'error');
+  if (!state.user) {
+    showNotification('Please login to view your bookings', 'error');
+    loginModal.classList.remove('hidden');
+    showLoginForm();
     return;
   }
+  loadBookings();
+});
 
+async function loadBookings() {
   try {
-    const response = await fetch(`/api/bookings?email=${encodeURIComponent(email)}`);
+    const response = await fetch('/api/bookings');
     const bookings = await response.json();
     
     if (!response.ok) {
@@ -455,7 +662,7 @@ async function loadBookings(email) {
     document.querySelectorAll('.cancelBookingBtn').forEach(btn => {
       btn.addEventListener('click', () => {
         showConfirmDialog(() => {
-          cancelBooking(btn.dataset.bookingId, email);
+          cancelBooking(btn.dataset.bookingId);
         });
       });
     });
@@ -466,16 +673,16 @@ async function loadBookings(email) {
 }
 
 // Cancel Booking
-async function cancelBooking(bookingId, email) {
+async function cancelBooking(bookingId) {
   try {
-    const response = await fetch(`/api/bookings/${bookingId}?email=${encodeURIComponent(email)}`, {
+    const response = await fetch(`/api/bookings/${bookingId}`, {
       method: 'DELETE'
     });
     const result = await response.json();
     
     if (response.ok) {
       showNotification('✓ Booking canceled successfully', 'success');
-      loadBookings(email);
+      loadBookings();
     } else {
       showNotification(result.error || 'Failed to cancel booking', 'error');
     }

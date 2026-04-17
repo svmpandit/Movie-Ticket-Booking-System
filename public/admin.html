@@ -11,6 +11,10 @@
     <div class="hero-content">
       <h1>🎬 DSP Cinema Admin</h1>
       <p>Manage movies and showtimes</p>
+      <div style="margin-top: 1rem;">
+        <button id="adminLogoutBtn" class="btn btn-secondary">Logout</button>
+        <a href="/" class="btn btn-primary" style="margin-left: 1rem;">Back to Site</a>
+      </div>
     </div>
   </header>
 
@@ -157,6 +161,16 @@
   </div>
 
   <script>
+    // Logout functionality
+    document.getElementById('adminLogoutBtn').addEventListener('click', async () => {
+      try {
+        await fetch('/api/logout', { method: 'POST' });
+        window.location.href = '/';
+      } catch (error) {
+        showNotification('Logout failed', 'error');
+      }
+    });
+
     // Notification System
     function showNotification(message, type = 'info') {
       const notification = document.createElement('div');

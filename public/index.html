@@ -15,6 +15,11 @@
         <button id="homeBtn" class="nav-link active">Home</button>
         <button id="browseBtn" class="nav-link">Browse Movies</button>
         <button id="bookingsBtn" class="nav-link">My Bookings</button>
+        <div id="authSection" class="auth-section">
+          <button id="loginBtn" class="nav-link">Login</button>
+          <button id="logoutBtn" class="nav-link hidden">Logout</button>
+          <span id="userInfo" class="user-info hidden"></span>
+        </div>
       </nav>
     </div>
   </header>
@@ -95,14 +100,6 @@
       <h3>Complete Your Booking</h3>
       <form id="bookingForm">
         <label>
-          Your Name
-          <input type="text" id="customerName" placeholder="Enter your full name" required />
-        </label>
-        <label>
-          Email Address
-          <input type="email" id="customerEmail" placeholder="your@email.com" required />
-        </label>
-        <label>
           Selected Seats
           <input readonly id="selectedSeatsList" placeholder="No seats selected" />
         </label>
@@ -169,10 +166,9 @@
     </div>
     
     <div class="booking-panel">
-      <h3>Load Your Bookings</h3>
+      <h3>Your Bookings</h3>
       <div class="booking-actions">
-        <input type="email" id="bookingEmail" placeholder="Enter your email address" />
-        <button id="loadBookingsBtn" class="btn btn-primary btn-small">Load Bookings</button>
+        <button id="loadBookingsBtn" class="btn btn-primary btn-small">Load My Bookings</button>
       </div>
     </div>
 
@@ -186,7 +182,7 @@
       ✨ Made with 💜 by <strong>Shivam</strong> ✨
     </p>
     <p style="margin-top: 1rem; font-size: 0.85rem;">
-      <a href="/admin">⚙️ Admin Panel</a> • © 2026 DSP Cinema. All rights reserved.
+      <a href="/admin" id="adminLink" style="display: none;">⚙️ Admin Panel</a> • © 2026 DSP Cinema. All rights reserved.
     </p>
   </footer>
 
@@ -198,6 +194,57 @@
       <div style="display: flex; gap: 1rem; justify-content: center;">
         <button id="cancelConfirmBtn" class="btn btn-secondary">No, Keep it</button>
         <button id="confirmActionBtn" class="btn btn-primary" style="background: var(--danger); border-color: var(--danger);">Yes, Cancel it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGIN MODAL -->
+  <div id="loginModal" class="modal-overlay hidden" style="z-index: 1000;">
+    <div class="modal-content" style="max-width: 400px; padding: 2rem;">
+      <button id="closeLoginModalBtn" class="modal-close-btn">&times;</button>
+      <h3 id="loginModalTitle" style="margin-bottom: 1.5rem; text-align: center;">Login to DSP Cinema</h3>
+      
+      <!-- Login Form -->
+      <div id="loginFormContainer">
+        <form id="loginForm">
+          <label>
+            Username
+            <input type="text" id="loginUsername" placeholder="Enter username" required />
+          </label>
+          <label>
+            Password
+            <input type="password" id="loginPassword" placeholder="Enter password" required />
+          </label>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Login</button>
+        </form>
+        <div style="text-align: center; margin-top: 1rem;">
+          <p>Don't have an account? <a href="#" id="showRegisterLink" style="color: var(--primary);">Register here</a></p>
+          <p style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+            Admin login: username "admin", password "9766"
+          </p>
+        </div>
+      </div>
+
+      <!-- Register Form -->
+      <div id="registerFormContainer" class="hidden">
+        <form id="registerForm">
+          <label>
+            Username
+            <input type="text" id="registerUsername" placeholder="Choose a username" required />
+          </label>
+          <label>
+            Password
+            <input type="password" id="registerPassword" placeholder="Create a password (min 6 chars)" required minlength="6" />
+          </label>
+          <label>
+            Confirm Password
+            <input type="password" id="registerConfirmPassword" placeholder="Confirm your password" required />
+          </label>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Register</button>
+        </form>
+        <div style="text-align: center; margin-top: 1rem;">
+          <p>Already have an account? <a href="#" id="showLoginLink" style="color: var(--primary);">Login here</a></p>
+        </div>
       </div>
     </div>
   </div>

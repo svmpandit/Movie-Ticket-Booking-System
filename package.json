@@ -1,13 +1,15 @@
 {
   "name": "movie-booking-site",
   "version": "1.0.0",
-  "description": "Full-stack movie ticket booking site built with Express and SQLite.",
+  "description": "Full-stack movie ticket booking site built with Express and MySQL.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "migrate": "node migrate_to_mysql.js"
   },
   "dependencies": {
     "express": "^4.18.4",
-    "sqlite3": "^5.1.6"
+    "express-session": "^1.17.3",
+    "mysql2": "^3.6.5"
   }
 }

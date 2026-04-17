@@ -2,12 +2,19 @@ const express = require('express');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
+const session = require('express-session');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const db = new sqlite3.Database(path.join(__dirname, 'movie-booking.db'));
 
 app.use(bodyParser.json());
+app.use(session({
+  secret: 'dsp-cinema-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false } // Set to true in production with HTTPS
+}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Add cache control headers for API routes
@@ -20,14 +27,11 @@ app.use('/api', (req, res, next) => {
 
 function initDatabase() {
   db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS movies (
+    db.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      description TEXT NOT NULL,
-      genre TEXT NOT NULL,
-      duration TEXT NOT NULL,
-      poster TEXT NOT NULL,
-      rating REAL DEFAULT 0
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('user', 'admin'))
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS shows (
@@ -42,12 +46,12 @@ function initDatabase() {
 
     db.run(`CREATE TABLE IF NOT EXISTS bookings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
       show_id INTEGER NOT NULL,
       seat_row INTEGER NOT NULL,
       seat_col INTEGER NOT NULL,
-      customer_name TEXT NOT NULL,
-      customer_email TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id),
       FOREIGN KEY(show_id) REFERENCES shows(id)
     )`);
 
@@ -82,6 +86,12 @@ function initDatabase() {
     db.get('SELECT COUNT(*) AS count FROM cinemas', (err, row) => {
       if (err || row.count > 0) return;
       db.run('INSERT INTO cinemas (id, name, location) VALUES (1, ?, ?)', ['Main Cinema', 'Mumbai']);
+    });
+
+    // Initialize admin user
+    db.get('SELECT COUNT(*) AS count FROM users WHERE role = ?', ['admin'], (err, row) => {
+      if (err || row.count > 0) return;
+      db.run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', ['admin', '9766', 'admin']);
     });
 
     db.get('SELECT COUNT(*) AS count FROM movies', (err, row) => {
@@ -206,6 +216,105 @@ function getSeatLayout(rows = 5, cols = 8) {
   return seats;
 }
 
+// Middleware to check if user is authenticated
+function requireAuth(req, res, next) {
+  if (req.session.userId) {
+    return next();
+  }
+  res.status(401).json({ error: 'Authentication required' });
+}
+
+// Middleware to check if user is admin
+function requireAdmin(req, res, next) {
+  if (req.session.userId && req.session.role === 'admin') {
+    return next();
+  }
+  res.status(403).json({ error: 'Admin access required' });
+}
+
+// Login route
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+
+  db.get('SELECT * FROM users WHERE username = ? AND password = ?', [username, password], (err, user) => {
+    if (err) return res.status(500).json({ error: 'Login failed' });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    req.session.role = user.role;
+
+    res.json({ 
+      success: true, 
+      user: { 
+        id: user.id, 
+        username: user.username, 
+        role: user.role 
+      } 
+    });
+  });
+});
+
+// Logout route
+app.post('/api/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) return res.status(500).json({ error: 'Logout failed' });
+    res.json({ success: true });
+  });
+});
+
+// Register route
+app.post('/api/register', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+  }
+
+  db.get('SELECT id FROM users WHERE username = ?', [username], (err, existingUser) => {
+    if (err) return res.status(500).json({ error: 'Registration failed' });
+    if (existingUser) return res.status(409).json({ error: 'Username already exists' });
+
+    db.run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', [username, password, 'user'], function(err) {
+      if (err) return res.status(500).json({ error: 'Failed to create user' });
+
+      // Auto-login after registration
+      req.session.userId = this.lastID;
+      req.session.username = username;
+      req.session.role = 'user';
+
+      res.json({
+        success: true,
+        user: {
+          id: this.lastID,
+          username: username,
+          role: 'user'
+        }
+      });
+    });
+  });
+});
+
+// Get current user
+app.get('/api/user', (req, res) => {
+  if (!req.session.userId) {
+    return res.json({ user: null });
+  }
+  res.json({ 
+    user: { 
+      id: req.session.userId, 
+      username: req.session.username, 
+      role: req.session.role 
+    } 
+  });
+});
+
 app.get('/api/movies', (req, res) => {
   db.all(`SELECT movies.*, COUNT(reviews.id) AS review_count,
           IFNULL(ROUND(AVG(reviews.rating),1), movies.rating) AS average_rating
@@ -224,7 +333,7 @@ app.get('/api/cinemas', (req, res) => {
   });
 });
 
-app.post('/api/admin/cinemas', (req, res) => {
+app.post('/api/admin/cinemas', requireAdmin, (req, res) => {
   const { name, location } = req.body;
   if (!name || !location) return res.status(400).json({ error: 'Name and location are required.' });
   db.run('INSERT INTO cinemas (name, location) VALUES (?, ?)', [name, location], function(err) {
@@ -233,7 +342,7 @@ app.post('/api/admin/cinemas', (req, res) => {
   });
 });
 
-app.delete('/api/admin/cinemas/:id', (req, res) => {
+app.delete('/api/admin/cinemas/:id', requireAdmin, (req, res) => {
   const cinemaId = req.params.id;
   db.run('DELETE FROM cinemas WHERE id = ?', [cinemaId], function(err) {
     if (err) return res.status(500).json({ error: 'Failed to delete cinema' });
@@ -283,52 +392,53 @@ app.get('/api/shows/:showId/seats', (req, res) => {
   });
 });
 
-app.post('/api/bookings', (req, res) => {
-  const { showId, row, col, customerName, customerEmail } = req.body;
-  if (!showId || !row || !col || !customerName || !customerEmail) {
-    return res.status(400).json({ error: 'All fields are required for booking.' });
+app.post('/api/bookings', requireAuth, (req, res) => {
+  const { showId, row, col } = req.body;
+  const userId = req.session.userId;
+
+  if (!showId || !row || !col) {
+    return res.status(400).json({ error: 'Show ID, row, and column are required for booking.' });
   }
 
   db.get('SELECT * FROM bookings WHERE show_id = ? AND seat_row = ? AND seat_col = ?', [showId, row, col], (err, existing) => {
     if (err) return res.status(500).json({ error: 'Booking verification failed.' });
     if (existing) return res.status(409).json({ error: 'Seat already booked.' });
 
-    db.run('INSERT INTO bookings (show_id, seat_row, seat_col, customer_name, customer_email) VALUES (?, ?, ?, ?, ?)',
-      [showId, row, col, customerName, customerEmail], function (insertErr) {
+    db.run('INSERT INTO bookings (user_id, show_id, seat_row, seat_col) VALUES (?, ?, ?, ?)',
+      [userId, showId, row, col], function (insertErr) {
         if (insertErr) return res.status(500).json({ error: 'Failed to create booking.' });
-        res.json({ id: this.lastID, showId, row, col, customerName, customerEmail });
+        res.json({ id: this.lastID, showId, row, col, userId });
       });
   });
 });
 
-app.get('/api/bookings', (req, res) => {
-  const email = req.query.email;
-  if (!email) return res.status(400).json({ error: 'Email is required to load bookings.' });
+app.get('/api/bookings', requireAuth, (req, res) => {
+  const userId = req.session.userId;
 
   db.all(`SELECT bookings.id, bookings.show_id, bookings.seat_row AS row, bookings.seat_col AS col,
-          bookings.customer_name, bookings.customer_email, bookings.created_at,
+          bookings.created_at, users.username,
           shows.date, shows.time, shows.screen, shows.price,
           cinemas.name AS cinema_name,
           movies.title AS movie_title
           FROM bookings
+          JOIN users ON users.id = bookings.user_id
           JOIN shows ON shows.id = bookings.show_id
           LEFT JOIN cinemas ON shows.cinema_id = cinemas.id
           JOIN movies ON movies.id = shows.movie_id
-          WHERE bookings.customer_email = ?
-          ORDER BY bookings.created_at DESC`, [email], (err, rows) => {
+          WHERE bookings.user_id = ?
+          ORDER BY bookings.created_at DESC`, [userId], (err, rows) => {
     if (err) return res.status(500).json({ error: 'Failed to load bookings.' });
     res.json(rows);
   });
 });
 
-app.delete('/api/bookings/:bookingId', (req, res) => {
+app.delete('/api/bookings/:bookingId', requireAuth, (req, res) => {
   const bookingId = req.params.bookingId;
-  const email = req.query.email;
-  if (!email) return res.status(400).json({ error: 'Email is required to cancel bookings.' });
+  const userId = req.session.userId;
 
-  db.run('DELETE FROM bookings WHERE id = ? AND customer_email = ?', [bookingId, email], function (err) {
+  db.run('DELETE FROM bookings WHERE id = ? AND user_id = ?', [bookingId, userId], function (err) {
     if (err) return res.status(500).json({ error: 'Failed to cancel booking.' });
-    if (!this.changes) return res.status(404).json({ error: 'Booking not found or email does not match.' });
+    if (!this.changes) return res.status(404).json({ error: 'Booking not found or does not belong to you.' });
     res.json({ deleted: true });
   });
 });
@@ -355,7 +465,7 @@ app.post('/api/reviews', (req, res) => {
     });
 });
 
-app.post('/api/admin/movies', (req, res) => {
+app.post('/api/admin/movies', requireAdmin, (req, res) => {
   const { title, description, genre, duration, poster, rating } = req.body;
   if (!title || !description || !genre || !duration || !poster) {
     return res.status(400).json({ error: 'All movie fields except rating are required.' });
@@ -368,7 +478,7 @@ app.post('/api/admin/movies', (req, res) => {
     });
 });
 
-app.post('/api/admin/movie-with-show', (req, res) => {
+app.post('/api/admin/movie-with-show', requireAdmin, (req, res) => {
   const { title, description, genre, duration, poster, rating, cinemaId, cinemaIds, date, time, screen, price } = req.body;
   
   // Validate movie fields
@@ -406,7 +516,7 @@ app.post('/api/admin/movie-with-show', (req, res) => {
     });
 });
 
-app.post('/api/admin/shows', (req, res) => {
+app.post('/api/admin/shows', requireAdmin, (req, res) => {
   const { movieId, cinemaId, cinemaIds, date, time, screen, price } = req.body;
   if (!movieId || !date || !time || !screen || !price) {
     return res.status(400).json({ error: 'All show fields are required.' });
@@ -429,7 +539,7 @@ app.post('/api/admin/shows', (req, res) => {
   });
 });
 
-app.delete('/api/admin/movies/:movieId', (req, res) => {
+app.delete('/api/admin/movies/:movieId', requireAdmin, (req, res) => {
   const movieId = req.params.movieId;
   
   // First delete all bookings for shows of this movie
@@ -459,7 +569,7 @@ app.delete('/api/admin/movies/:movieId', (req, res) => {
   });
 });
 
-app.get('/admin', (req, res) => {
+app.get('/admin', requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 

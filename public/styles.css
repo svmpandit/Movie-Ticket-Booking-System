@@ -79,6 +79,22 @@ body {
   background: rgba(229, 9, 20, 0.1);
 }
 
+.auth-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-info {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.hidden {
+  display: none !important;
+}
+
 /* HOME PAGE */
 .home-page {
   animation: fadeIn 0.6s ease;
