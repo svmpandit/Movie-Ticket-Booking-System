@@ -146,6 +146,7 @@ function goToShowSelection(movieId) {
   state.selectedMovie = state.movies.find(movie => movie.id === movieId);
   selectedMovieTitle.textContent = state.selectedMovie.title;
   selectedMovieDescription.textContent = state.selectedMovie.description;
+  reviewMovieId.value = movieId;
   
   showSection.classList.remove('hidden');
   const modalContent = showSection.querySelector('.modal-content');

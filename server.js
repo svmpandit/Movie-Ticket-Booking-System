@@ -34,14 +34,26 @@ function initDatabase() {
       role TEXT NOT NULL CHECK(role IN ('user', 'admin'))
     )`);
 
+    db.run(`CREATE TABLE IF NOT EXISTS movies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      genre TEXT,
+      duration TEXT,
+      poster TEXT,
+      rating REAL DEFAULT 0
+    )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS shows (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       movie_id INTEGER NOT NULL,
+      cinema_id INTEGER DEFAULT 1,
       date TEXT NOT NULL,
       time TEXT NOT NULL,
       screen TEXT NOT NULL,
       price REAL NOT NULL,
-      FOREIGN KEY(movie_id) REFERENCES movies(id)
+      FOREIGN KEY(movie_id) REFERENCES movies(id),
+      FOREIGN KEY(cinema_id) REFERENCES cinemas(id)
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS bookings (
